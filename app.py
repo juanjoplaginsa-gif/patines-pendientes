@@ -75,4 +75,5 @@ try:
 except Exception as e:
     st.error("Hubo un problema al leer el Google Sheet.")
     st.info("Asegúrate de que la hoja siga 'Publicada en la Web' como CSV.")
+
     st.write(e)
