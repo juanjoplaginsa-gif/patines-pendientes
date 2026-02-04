@@ -1,79 +1,46 @@
 import streamlit as st
 import pandas as pd
 
-# Configuración visual de la página
-st.set_page_config(page_title="Control de Producción - BIRK", layout="wide", page_icon="👡")
+# Configuración visual
+st.set_page_config(page_title="Control de Producción - BIRK", layout="wide")
 
-# Enlace que me proporcionaste
+# Tu enlace de Google Sheets corregido
 SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS9mEVGhFL6d_wC49GEz52Z3Hrb1wf-cGqYxEUrZPIiTI7nJ0KLEjYw0YqBCqPYP3yMfPx8h79RRjS7/pub?gid=0&single=true&output=csv"
 
-@st.cache_data(ttl=60)  # Se refresca cada 1 minuto automáticamente
+@st.cache_data(ttl=60)
 def load_data():
+    # Leemos directamente del link de Google
     df = pd.read_csv(SHEET_URL)
-    # Limpiar nombres de columnas por si hay espacios
     df.columns = [c.strip() for c in df.columns]
-    # Asegurar que PENDIENTES sea numérico
+    # Convertimos a número la columna PENDIENTES
     df['PENDIENTES'] = pd.to_numeric(df['PENDIENTES'], errors='coerce').fillna(0)
     return df
 
 try:
     df = load_data()
 
-    # --- SIDEBAR (FILTROS) ---
-    st.sidebar.header("🔍 Filtros de Búsqueda")
-    
-    # Filtro 1: Fecha de Servicio
-    fechas = ["Todas"] + sorted(df["FECHA SERVICIO"].unique().tolist(), reverse=True)
-    fecha_sel = st.sidebar.selectbox("Filtrar por Fecha:", fechas)
+    st.title("📦 Panel de Control de Pendientes")
 
-    # Filtro 2: Orden de Compra
-    ocs = ["Todas"] + sorted(df["ORDEN DE COMPRA"].unique().astype(str).tolist())
-    oc_sel = st.sidebar.selectbox("Filtrar por Orden de Compra:", ocs)
+    # --- FILTROS ---
+    st.sidebar.header("Filtros")
+    oc_list = ["Todas"] + sorted(df["ORDEN DE COMPRA"].unique().astype(str).tolist())
+    oc_sel = st.sidebar.selectbox("Orden de Compra:", oc_list)
 
-    # Aplicar lógica de filtros
     df_final = df.copy()
-    if fecha_sel != "Todas":
-        df_final = df_final[df_final["FECHA SERVICIO"] == fecha_sel]
     if oc_sel != "Todas":
         df_final = df_final[df_final["ORDEN DE COMPRA"] == oc_sel]
 
-    # --- CUERPO DE LA APP ---
-    st.title("📦 Panel de Control de Pendientes")
-    st.markdown(f"**Archivo origen:** Google Sheets (Sincronizado)")
+    # --- MÉTRICAS ---
+    m1, m2 = st.columns(2)
+    m1.metric("Total Programado", f"{int(df_final['TOTAL PATINES'].sum()):,}")
+    m2.metric("Pendientes", f"{int(df_final['PENDIENTES'].sum()):,}")
 
-    # Métricas principales
-    m1, m2, m3 = st.columns(3)
-    total_p = int(df_final["TOTAL PATINES"].sum())
-    pendientes = int(df_final["PENDIENTES"].sum())
-    completado = total_p - pendientes
-    
-    m1.metric("Total Programado", f"{total_p:,}")
-    m2.metric("Total Pendiente", f"{pendientes:,}", delta=f"{(pendientes/total_p)*100:.1f}% del total", delta_color="inverse")
-    m3.metric("Total Completado", f"{completado:,}")
-
-    st.divider()
-
-    # --- TABLA CON ESTILO ---
+    # --- TABLA ---
     def style_rows(row):
-        # Si pendientes es 0, toda la fila se pone verde suave
-        if row['PENDIENTES'] == 0:
-            return ['background-color: #d4edda; color: #155724'] * len(row)
-        return [''] * len(row)
+        return ['background-color: #d4edda' if row['PENDIENTES'] == 0 else '' for _ in row]
 
-    st.subheader("📋 Detalle de Producción")
-    st.dataframe(
-        df_final.style.apply(style_rows, axis=1),
-        use_container_width=True,
-        height=500,
-        hide_index=True
-    )
-
-    if st.button("🔄 Forzar Actualización de Datos"):
-        st.cache_data.clear()
-        st.rerun()
+    st.dataframe(df_final.style.apply(style_rows, axis=1), use_container_width=True)
 
 except Exception as e:
-    st.error("Hubo un problema al leer el Google Sheet.")
-    st.info("Asegúrate de que la hoja siga 'Publicada en la Web' como CSV.")
-
+    st.error("Error al cargar datos. Verifica el formato del Sheet.")
     st.write(e)
